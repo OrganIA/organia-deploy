@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Use like this:
+# ./deploy demo organia-frontend master
+# ./deploy prod organia-server abcdef12
+
+set -eux
+
+environment=$1
+shift
+
+project=$1
+shift
+
+target=$1
+shift
+
+cd "$HOME/$environment/$project"
+
+git fetch
+git checkout "$target"
+podman build . -t "$project:$environment"
+systemctl --user restart $project-$environment
