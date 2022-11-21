@@ -1,3 +1,0 @@
-[Unit]
-ExecStartPre=podman rm -f %N
-ExecStart=podman run --rm --name %N -p ${PORT}:8080 organia-frontend:demo
