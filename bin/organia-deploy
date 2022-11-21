@@ -15,9 +15,30 @@ shift
 target=$1
 shift
 
+image="$project:$environment"
+container="$project-$environment"
+
 cd "$HOME/$environment/$project"
 
 git fetch
 git checkout "$target"
 podman build . -t "$project:$environment"
-systemctl --user restart $project-$environment
+podman rm -f "$container"
+
+if [ "$project" == 'organia-frontend' ]; then
+	podman run --rm --name "$container" -v "/app/dist:/srv/organia-frontend/$environment" "$image"
+fi
+
+if [ "$project" == 'organia-server' ]; then
+	if [ "$environment" == 'prod' ]; then
+		port=8001
+	elif [ "$environment" == 'dev' ]; then
+		port=8002
+	elif [ "$environment" == 'demo' ]; then
+		port=8003
+	else
+		echo Unknown environment \"$environment\" >&2
+		exit 1
+	fi
+	podman run -d --rm --name "$container" -p "$port:8000" "$image"
+fi
