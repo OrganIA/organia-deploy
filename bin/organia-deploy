@@ -6,27 +6,67 @@
 
 set -eux
 
+mkcd()
+{
+	mkdir -p "$1"
+	cd "$1"
+}
+
+finish()
+{
+	echo Done
+	exit ${1:-0}
+}
+
+
 environment=$1
 shift
 
 project=$1
 shift
 
-target=$1
+commit=$1
 shift
 
+# Use the project specific SSH key
+export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_rsa.$project -o IdentitiesOnly=yes"
+
+# Name of the Docker image to build
 image="$project:$environment"
+
+# Name of the container to create
 container="$project-$environment"
 
-cd "$HOME/$environment/$project"
+# Where to checkout the repo
+dir="$HOME/deploy/envs/$environment/$project"
 
-git fetch
-git checkout "$target"
+# What directory on the host to bind inside the frontend container
+front_host_mount="/srv/organia-frontend/$environment"
+
+# What directory inside the frontend container to bind
+front_container_mount=/app/dist
+
+
+# Start up from a clean directory
+rm -rf "$dir"
+mkcd "$dir"
+
+# Only checkout the commit we want to build and nothing else
+git init .
+git remote add origin "git@github.com:OrganIA/$project.git"
+git fetch --depth 1 origin "$commit"
+git checkout FETCH_HEAD
+
+# Build the Docker image
 podman build . -t "$project:$environment"
-podman rm -f "$container"
+
+# Stop and remove container with the same name if it already exists
+podman rm -fi "$container"
 
 if [ "$project" == 'organia-frontend' ]; then
-	podman run --rm --name "$container" -v "/app/dist:/srv/organia-frontend/$environment" "$image"
+	# Run the image, this should build the frontend files
+	podman run --rm --name "$container" -v "$front_host_mount:$front_container_mount" "$image"
+	finish
 fi
 
 if [ "$project" == 'organia-server' ]; then
@@ -40,5 +80,7 @@ if [ "$project" == 'organia-server' ]; then
 		echo Unknown environment \"$environment\" >&2
 		exit 1
 	fi
+	# Run the image, this should listen on a port in the background
 	podman run -d --rm --name "$container" -p "$port:8000" "$image"
+	finish
 fi
