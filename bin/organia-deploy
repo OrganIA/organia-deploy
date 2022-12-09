@@ -63,24 +63,36 @@ podman build . -t "$project:$environment"
 # Stop and remove container with the same name if it already exists
 podman rm -fi "$container"
 
+
+if [ "$environment" == 'prod' ]; then
+	port=8001
+	url=https://organia.savatier.fr/api/
+	ws_url=wss://organia.savatier.fr/api/chats/ws
+elif [ "$environment" == 'dev' ]; then
+	port=8002
+	url=https://dev.organia.savatier.fr/api/
+	ws_url=wss://dev.organia.savatier.fr/api/chats/ws
+elif [ "$environment" == 'demo' ]; then
+	port=8003
+	url=https://demo.organia.savatier.fr/api/
+	ws_url=wss://demo.organia.savatier.fr/api/chats/ws
+fi
+
 if [ "$project" == 'organia-frontend' ]; then
 	# Run the image, this should build the frontend files
-	podman run --rm --name "$container" -v "$front_host_mount:$front_container_mount" "$image"
+	podman run --rm --name "$container" \
+		-v "$front_host_mount:$front_container_mount" \
+		-e VUE_APP_API_REMOTE_URL="$url" \
+		-e VUE_APP_WEBSOCKET_REMOTE_URL="$ws_url" \
+		"$image"
 	finish
 fi
 
 if [ "$project" == 'organia-server' ]; then
-	if [ "$environment" == 'prod' ]; then
-		port=8001
-	elif [ "$environment" == 'dev' ]; then
-		port=8002
-	elif [ "$environment" == 'demo' ]; then
-		port=8003
-	else
-		echo Unknown environment \"$environment\" >&2
-		exit 1
-	fi
 	# Run the image, this should listen on a port in the background
-	podman run -d --rm --name "$container" -p "$port:8000" "$image"
+	podman run -d --rm --name "$container" \
+		-p "$port:8000" \
+		-e ENVIRONMENT="$environment" \
+		"$image"
 	finish
 fi
